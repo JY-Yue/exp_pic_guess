@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Video Experiment</title>
+
+  <!-- jsPsych core + plugins (CDN) -->
+  <script src="jspsych/jspsych.js"></script>
+  <script src="jspsych/plugin-preload.js"></script>
+  <script src="jspsych/plugin-image-keyboard-response.js"></script>
+  <script src="jspsych/plugin-video-button-response.js"></script>
+  <script src="jspsych/plugin-video-keyboard-response.js"></script>
+  <script src="jspsych/plugin-html-button-response.js"></script>
+  <script src="jspsych/plugin-survey-html-form.js"></script>
+  <script src="https://unpkg.com/@jspsych/extension-pipe@0.2.0"></script>
+  <link href="jspsych/jspsych.css" rel="stylesheet" type="text/css" />
+
+  <style>
+    #jspsych-target { text-align: center; }
+  </style>
+</head>
+<body></body>
+<script>
+
+/* =========================================================
+   EXPERIMENT SETUP
+   ========================================================= */
+
+// ---- EDIT these two to match your own study ----
+const DATAPIPE_EXPERIMENT_ID = "V2v2j0jUtKw9";       // from pipe.jspsych.org
+const PROLIFIC_COMPLETION_URL = "https://google.com"; // from Prolific's "Study Completion" setup
+
+// Fallback random ID generator, used only if the experiment is opened
+// outside of Prolific (e.g. while testing), so there's still always a
+// usable filename.
+function randomID(length = 10) {
+  const chars = "0123456789abcdefghjklmnopqrstuvwxyz";
+  let result = "";
+  for (let i = 0; i < length; i++) {
+    result += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return result;
+}
+
+// ---- Capture Prolific's URL parameters, if present ----
+// Prolific appends ?PROLIFIC_PID=...&STUDY_ID=...&SESSION_ID=... to your
+// study link automatically. Read directly from the URL here (rather than via
+// jsPsych.data.getURLVariable) because we need prolific_pid BEFORE jsPsych
+// exists, to use it as the DataPipe filename below.
+const urlParams = new URLSearchParams(window.location.search);
+const prolific_pid = urlParams.get('PROLIFIC_PID') || randomID();
+const study_id = urlParams.get('STUDY_ID');
+const session_id = urlParams.get('SESSION_ID');
+
+const jsPsych = initJsPsych({
+  extensions: [
+    {
+      type: jsPsychExtensionPipe,
+      params: {
+        experiment_id: DATAPIPE_EXPERIMENT_ID,
+        // Using the participant's Prolific ID as the filename. This also
+        // doubles as a safeguard against duplicate submissions: if someone
+        // returns and completes the study twice, both saves land in the
+        // same filename rather than creating two separate data files.
+        filename: () => `${prolific_pid}.csv`
+      }
+    }
+  ],
+  on_finish: function () {
+    // No manual save call needed here -- the extension has already been
+    // staging data as trials complete, and submits the final dataset
+    // automatically when the experiment ends (including on abort). This
+    // on_finish just sends the participant back to Prolific.
+    window.location = PROLIFIC_COMPLETION_URL;
+  }
+});
+
+jsPsych.data.addProperties({
+  prolific_pid: prolific_pid,
+  study_id: study_id,
+  session_id: session_id
+});
+
+// ---- INTRO TRIALS: consent, instructions, audio check, ready screen ----
+ 
+const consent_trial = {
+  type: jsPsychHtmlButtonResponse,
+  stimulus: `
+    <div style="max-width:700px; margin:0 auto; text-align:left;">
+      <h2>Consent Form</h2>
+      <p>
+        <p>By answering the following questions, you are participating in a study being performed by cognitive scientists in the University of Toronto. This study has been approved by the University of Toronto Research Ethics Board. You must be at least 18 years old to participate. Your participation in this research is voluntary. Your anonymity is assured; the researchers who have requested your participation will not receive any personal information about you. You can download and read the full consent form <a href='Consent_Form.pdf' download='Consent_Form.pdf' target='_blank'>here</a>.</p>
+        <p>Agreeing to continue this survey by clicking the button below indicates that you have downloaded and read the information letter, are participating voluntarily, and are 18 years of age or older. Please contact <a href='mailto: psycholinguistics@utoronto.ca'>psycholinguistics@utoronto.ca</a> with questions about this survey.</p>
+        <p>If you do not agree to all of these statements, please close your browser window. </p>
+      </p>
+    </div>
+  `,
+  choices: ['I Agree'],
+};
+ 
+const instructions_trial = {
+  type: jsPsychHtmlButtonResponse,
+  stimulus: `
+    <div style="max-width:700px; margin:0 auto; text-align:left;">
+      <h2>Instructions</h2>
+      <p>
+        You will see some videos we recorded from a previous experiment, where a woman interacted with another person and they talked about some objects.
+        <br><br>Sometimes she told them something about the object. Sometimes she asked for their opinion.
+        <br><br>We edited the videos so that the object is hidden behind a grey rectangle. Your job is to guess what is the most likely object she was talking about.
+        <br><br>After each video, there will also be a quick attention check question to make sure you watched the video carefully.
+      </p>
+    </div>
+  `,
+  choices: ['Continue'],
+};
+
+// ---- COMPREHENSION CHECK + LOOP BACK TO INSTRUCTIONS ----
+// EDIT the questions, options, and `correct` answers below. Each question is shown
+// as a set of radio buttons. If ANY answer is wrong, the participant sees an alert
+// and goes back to the instructions page, then answers the questions again.
+const COMPREHENSION_QUESTIONS = [
+  {
+    q: 'Where are the videos recorded from?',
+    options: ['A previous experiment where people interacted',
+              'A short film'],
+    correct: 'A previous experiment where people interacted'
+  },
+  {
+    q: 'Will you see the object in the video?',
+    options: ['Yes, the video shows everything.',
+              'No, the videos are edited and the object is hidden.'],
+    correct: 'No, the videos are edited and the object is hidden.'
+  },
+  {
+    q: 'What is your task?',
+    options: ['Guess which object she was talking about',
+              'Judge the sentences she said'],
+    correct: 'Guess which object she was talking about'
+  }
+];
+
+const comprehension_trial = {
+  type: jsPsychSurveyHtmlForm,
+  preamble: '<h2>Comprehension Check</h2>',
+  html: COMPREHENSION_QUESTIONS.map((item, i) => `
+    <div style="text-align:left; max-width:600px; margin:0 auto 20px auto;">
+      <p><b>${item.q}</b></p>
+      ${item.options.map((opt, j) => `
+        <label style="display:block; margin:4px 0;">
+          <input type="radio" name="Q${i}" value="${opt}" ${j === 0 ? 'required' : ''}> ${opt}
+        </label>`).join('')}
+    </div>`).join(''),
+  button_label: 'Submit',
+  data: { trial_stage: 'comprehension' },
+  on_finish: function (data) {
+    // data.response looks like {Q0: "...", Q1: "...", Q2: "..."}
+    data.all_correct = COMPREHENSION_QUESTIONS.every((item, i) => data.response['Q' + i] === item.correct);
+  }
+};
+
+// Repeats [instructions -> comprehension questions] until every answer is correct.
+// Each pass through the loop adds a row with trial_stage 'comprehension', so the
+// number of those rows per participant = number of attempts.
+const instructions_loop = {
+  timeline: [instructions_trial, comprehension_trial],
+  loop_function: function (data) {
+    const last = data.filter({ trial_stage: 'comprehension' }).last(1).values()[0];
+    if (last.all_correct) {
+      return false; // all correct: leave the loop and continue
+    } else {
+      alert('Some answers were incorrect. Please read the instructions again carefully.');
+      return true;  // go back to the instructions
+    }
+  }
+};
+
+const audio_check_trial = {
+  type: jsPsychHtmlButtonResponse,
+  stimulus: `
+    <div style="max-width:700px; margin:0 auto;">
+      <h2>Sound Check</h2>
+      <p>Please press play below and adjust your volume to a comfortable level. Then click \"Continue\" to begin the experiment.</p>
+      <audio controls>
+        <source src="audio/volume_check.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+      </audio>
+    </div>
+  `,
+  choices: ['Continue'],
+};
+ 
+// const ready_trial = {
+//   type: jsPsychHtmlButtonResponse,
+//   stimulus: `<h2>You've completed the practice. Now let's begin the experiment.</h2>`,
+//   choices: ['Continue'],
+// };
+
+
+// ---- EDIT THESE PATHS TO MATCH YOUR OWN FILES ----
+// const stimuli = [
+//   {
+//     fixation_image: 'img/blue_towel_clearly_pos_left.jpg',
+//     video: 'videos/blue_towel_clearly_pos_left.mp4',
+//     subtitle: 'Is the towel on the left blue?',
+//     mcq_prompt: '<p>Attention check:<br><br> Which object was the question about?</p>',
+//     mcq_images: [
+//       'img/blue_towel_clearly_true.jpg',
+//       'img/blue_towel_clearly_false.jpg',
+//       'img/blue_towel_debatable.jpg',
+//       'img/blue_towel_unused.jpg'
+//     ]
+//   },
+//   {
+//     fixation_image: 'img/yellow_folder_clearly_pos_right.jpg',
+//     video: 'videos/yellow_folder_clearly_pos_right.mp4',
+//     subtitle: 'Is the folder on the right yellow?',
+//     mcq_prompt: '<p>Attention check:<br><br> Which object was the question about?</p>',
+//     mcq_images: [
+//       'img/yellow_folder_clearly_true.jpg',
+//       'img/yellow_folder_clearly_false.jpg',
+//       'img/yellow_folder_debatable.jpg',
+//       'img/yellow_folder_unused.jpg'
+//     ]
+//   }
+// ];
+
+// =========================================================
+// LIST SETUP: manually-defined lists, one picked at random per participant
+// =========================================================
+ 
+// ---- OTHER SENTENCES FOR THE ATTENTION-CHECK STAGE ----
+// The correct sentence on each trial is that trial's subtitle (the third element
+// of the trial entry in the lists). Here you give the FIVE other sentences
+// (foils) for each item. Replace the PLACEHOLDER text with your real sentences.
+// They are keyed by item_name, so the same five foils are used for every
+// condition of that item. If the foils differ by condition as well, tell me and
+// I'll key this table by item_name + condition instead.
+const OTHER_SENTENCES = {
+  yellow_folder:    ["There is a yellow folder.","Is that folder not yellow?","Isn't this folder thin?","This folder is thin.","Is this folder made of paper?"],
+  open_box:         ["There is a open box.","Is that box not open?","Isn't this box plastic?","This box is plastic.","Is this box locked?"],
+  empty_jar:        ["Here is a empty jar.","Is that jar not empty?","This jar isn't fragile.","Isn't this jar fragile?","This jar is glass."],
+  striped_sock:     ["Here is a striped sock.","Is that sock not striped?","This sock isn't long.","Isn't this sock long?","This sock is warm."],
+  blue_towel:       ["Here is a blue towel.","Is that towel not blue?","This towel is cotton.","Is this towel cotton?","This towel isn't soft."],
+  full_cup:         ["There is a full cup.","Is that cup not full?","Is this cup transparent?","This cup isn't transparent.","Isn't this cup cheap?"],
+  round_plate:      ["Here is a round plate.","Is that plate not round?","This plate is paper.","Is this plate paper?","This plate isn't heavy."],
+  straight_line:    ["There is a straight line.","Is that line not straight?","Is this line clear?","This line isn't clear.","Isn't this line thick?"],
+  practice_plushie: ["Here is a cute plushie.","Is that plushie not cute?","This plushie is a hedgehog.","This plushie isn't a hedgehog.","Is this plushie nice?"],
+  practice_drawing: ["There is a realistic drawing.","Is that drawing not realistic?","Isn't this drawing beautiful?","This drawing is beautiful.","Is this drawing by hand?"]
+};
+
+function get_other_sentences(item_name) {
+  const others = OTHER_SENTENCES[item_name];
+  if (!others || others.length !== 5) {
+    throw new Error(`OTHER_SENTENCES needs exactly 5 sentences for item "${item_name}"`);
+  }
+  return others;
+}
+
+// ---- Helper: builds the full stimulus object (file paths, prompts, etc.)
+// from just an item name and a condition label. This is the ONE place your
+// file-naming convention lives, so none of the 8 lists below need to repeat it.
+// EDIT this naming pattern to match how your files are actually named.
+// The optional `subtitle` argument lets you override the placeholder text
+// for a specific item/condition if needed; otherwise it's auto-generated.
+function build_trial(item_name, condition, subtitle, picture_numbers = [1, 2, 3, 4, 5]) {
+  return {
+    item_name: item_name,
+    condition: condition,
+    fixation_image: `img/${item_name}_${condition}.png`,
+    video: `videos/${item_name}_${condition}.mp4`,
+    subtitle: subtitle,
+
+    // Stage 3 (picture selection): FIVE pictures, always shown in this fixed
+    // left-to-right order. EDIT this naming pattern to match your files.
+    picture_prompt: '<p>Which object do you think she\'s talking about?</p>',
+    // picture_numbers sets the left-to-right order, e.g. [1,2,3,4,5] or [5,4,3,2,1].
+    picture_numbers: picture_numbers,
+    picture_choices: picture_numbers.map(i => `img/${item_name}_${i}.png`),
+
+    // Stage 4 (sentence selection): SIX sentences, shown in a random order:
+    // the subtitle (the correct sentence) plus five other sentences looked up
+    // in the OTHER_SENTENCES table above.
+    sentence_prompt: '<p>Attention check:<br><br> What did she say in the video?</p>',
+    sentences: [subtitle, ...get_other_sentences(item_name)]
+  };
+}
+
+// ---- Manually define each of your 8 lists ----
+// Each list is an array of [item_name, condition] pairs, IN THE EXACT ORDER you
+// want them presented. Edit these 8 arrays to match your actual design, or
+// generate this whole block from your spreadsheet (see csv_to_jspsych_lists.py).
+// Add a 3rd element, e.g. ['blue_towel', 'condA', 'Did the character pick it up?'],
+// if you want to supply a specific subtitle instead of the auto-generated one.
+const lists = [
+  [ ["straight_line", "neg_que", "Isn't this line straight?", [1,2,3,4,5]], 
+    ["yellow_folder", "pos_que", "Is this folder yellow?", [1,2,3,4,5]], 
+    ["empty_jar", "neg_dec", "This jar isn't empty.", [1,2,3,4,5]], 
+    ["striped_sock", "neg_dec", "This sock isn't striped.", [1,2,3,4,5]], 
+    ["open_box", "pos_que", "Is this box open?", [1,2,3,4,5]], 
+    ["round_plate", "pos_dec", "This plate is round.", [1,2,3,4,5]], 
+    ["full_cup", "neg_que", "Isn't this cup full?", [1,2,3,4,5]], 
+    ["blue_towel", "pos_dec", "This towel is blue.", [1,2,3,4,5]] ], // List 1
+  [ ["full_cup", "neg_dec", "This cup isn't full.", [1,2,3,4,5]], 
+    ["blue_towel", "neg_que", "Isn't this towel blue?", [1,2,3,4,5]], 
+    ["open_box", "pos_dec", "This box is open.", [1,2,3,4,5]], 
+    ["round_plate", "neg_que", "Isn't this plate round?", [1,2,3,4,5]], 
+    ["empty_jar", "pos_que", "Is this jar empty?", [1,2,3,4,5]], 
+    ["straight_line", "neg_dec", "This line isn't straight.", [1,2,3,4,5]], 
+    ["striped_sock", "pos_que", "Is this sock striped?", [1,2,3,4,5]], 
+    ["yellow_folder", "pos_dec", "This folder is yellow.", [1,2,3,4,5]] ], // List 2
+  [ ["full_cup", "pos_que", "Is this cup full?", [1,2,3,4,5]], 
+    ["open_box", "neg_que", "Isn't this box open?", [1,2,3,4,5]], 
+    ["blue_towel", "neg_dec", "This towel isn't blue.", [1,2,3,4,5]], 
+    ["striped_sock", "pos_dec", "This sock is striped.", [1,2,3,4,5]], 
+    ["straight_line", "pos_que", "Is this line straight?", [1,2,3,4,5]], 
+    ["round_plate", "neg_dec", "This plate isn't round.", [1,2,3,4,5]], 
+    ["yellow_folder", "neg_que", "Isn't this folder yellow?", [1,2,3,4,5]], 
+    ["empty_jar", "pos_dec", "This jar is empty.", [1,2,3,4,5]] ], // List 3
+  [ ["round_plate", "pos_que", "Is this plate round?", [1,2,3,4,5]], 
+    ["empty_jar", "neg_que", "Isn't this jar empty?", [1,2,3,4,5]], 
+    ["yellow_folder", "neg_dec", "This folder isn't yellow.", [1,2,3,4,5]], 
+    ["straight_line", "pos_dec", "This line is straight.", [1,2,3,4,5]], 
+    ["striped_sock", "neg_que", "Isn't this sock striped?", [1,2,3,4,5]], 
+    ["full_cup", "pos_dec", "This cup is full.", [1,2,3,4,5]], 
+    ["blue_towel", "pos_que", "Is this towel blue?", [1,2,3,4,5]], 
+    ["open_box", "neg_dec", "This box isn't open.", [1,2,3,4,5]] ], // List 4
+  [ ["straight_line", "neg_que", "Isn't this line straight?", [5,4,3,2,1]], 
+    ["yellow_folder", "pos_que", "Is this folder yellow?", [5,4,3,2,1]], 
+    ["empty_jar", "neg_dec", "This jar isn't empty.", [5,4,3,2,1]], 
+    ["striped_sock", "neg_dec", "This sock isn't striped.", [5,4,3,2,1]], 
+    ["open_box", "pos_que", "Is this box open?", [5,4,3,2,1]], 
+    ["round_plate", "pos_dec", "This plate is round.", [5,4,3,2,1]], 
+    ["full_cup", "neg_que", "Isn't this cup full?", [5,4,3,2,1]], 
+    ["blue_towel", "pos_dec", "This towel is blue.", [5,4,3,2,1]] ], // List 5
+  [ ["full_cup", "neg_dec", "This cup isn't full.", [5,4,3,2,1]], 
+    ["blue_towel", "neg_que", "Isn't this towel blue?", [5,4,3,2,1]], 
+    ["open_box", "pos_dec", "This box is open.", [5,4,3,2,1]], 
+    ["round_plate", "neg_que", "Isn't this plate round?", [5,4,3,2,1]], 
+    ["empty_jar", "pos_que", "Is this jar empty?", [5,4,3,2,1]], 
+    ["straight_line", "neg_dec", "This line isn't straight.", [5,4,3,2,1]], 
+    ["striped_sock", "pos_que", "Is this sock striped?", [5,4,3,2,1]], 
+    ["yellow_folder", "pos_dec", "This folder is yellow.", [5,4,3,2,1]] ], // List 6
+  [ ["full_cup", "pos_que", "Is this cup full?", [5,4,3,2,1]], 
+    ["open_box", "neg_que", "Isn't this box open?", [5,4,3,2,1]], 
+    ["blue_towel", "neg_dec", "This towel isn't blue.", [5,4,3,2,1]], 
+    ["striped_sock", "pos_dec", "This sock is striped.", [5,4,3,2,1]], 
+    ["straight_line", "pos_que", "Is this line straight?", [5,4,3,2,1]], 
+    ["round_plate", "neg_dec", "This plate isn't round.", [5,4,3,2,1]], 
+    ["yellow_folder", "neg_que", "Isn't this folder yellow?", [5,4,3,2,1]], 
+    ["empty_jar", "pos_dec", "This jar is empty.", [5,4,3,2,1]] ], // List 7
+  [ ["round_plate", "pos_que", "Is this plate round?", [5,4,3,2,1]], 
+    ["empty_jar", "neg_que", "Isn't this jar empty?", [5,4,3,2,1]], 
+    ["yellow_folder", "neg_dec", "This folder isn't yellow.", [5,4,3,2,1]], 
+    ["straight_line", "pos_dec", "This line is straight.", [5,4,3,2,1]], 
+    ["striped_sock", "neg_que", "Isn't this sock striped?", [5,4,3,2,1]], 
+    ["full_cup", "pos_dec", "This cup is full.", [5,4,3,2,1]], 
+    ["blue_towel", "pos_que", "Is this towel blue?", [5,4,3,2,1]], 
+    ["open_box", "neg_dec", "This box isn't open.", [5,4,3,2,1]] ], // List 8
+];
+
+
+
+// =========================================================
+// PRACTICE TRIALS (same for every list)
+// Same format as the main lists: [item_name, condition, subtitle].
+// They go through the same build_trial() helper, so they follow the same
+// file naming convention as your real stimuli, e.g. for the first entry:
+//   img/practice1_clearly_pos_left.jpg, videos/practice1_clearly_pos_left.mp4,
+//   img/practice1_clearly_true.jpg, ..._clearly_false.jpg, ..._debatable.jpg, ..._unused.jpg
+// EDIT these to match your actual practice stimuli.
+// =========================================================
+const practice_list = [
+  ["practice_plushie", "practice", "This plushie is cute.", [1,2,3,4,5]],
+  ["practice_drawing", "practice", "Do you think this drawing is realistic?", [1,2,3,4,5]]
+];
+
+// =========================================================
+// TRIAL SEQUENCE BUILDER
+// Turns ONE stimulus object into the full per-item trial sequence
+// (fixation -> autoplay video -> video + picture choice -> sentence choice -> continue).
+// It is used for BOTH the practice trials and the real trials, so they are
+// guaranteed to look identical, and any change to the trial design only has
+// to be made in this one place.
+// `is_practice` is saved in every trial's data (practice: true/false) so
+// practice rows are easy to filter out at analysis time.
+// =========================================================
+function make_trial_sequence(s, is_practice) {
+  const base_data = { item_name: s.item_name, condition: s.condition, practice: is_practice };
+
+  // Sentences are shuffled per-participant, and the resulting order is stored
+  // in trial data so you can map the clicked button index back to the sentence.
+  // (The 5 pictures in stage 3 are NOT shuffled: they use a fixed order.)
+  const shuffled_sentences = jsPsych.randomization.shuffle(s.sentences);
+
+  return [
+    // Stage 1: fixation image for 1.5 seconds, no response needed
+    {
+      type: jsPsychImageKeyboardResponse,
+      stimulus: s.fixation_image,
+      stimulus_width: 640,
+      choices: "NO_KEYS",
+      trial_duration: 1500,
+      response_ends_trial: false,
+      data: { ...base_data, trial_stage: 'fixation' }
+    },
+
+    // Stage 2: video autoplays once, no controls, progresses automatically at the end
+    {
+      type: jsPsychVideoKeyboardResponse,
+      stimulus: [s.video],
+      width: 640,
+      choices: "NO_KEYS",
+      //prompt: `<p style="font-size:18px;">${s.subtitle}</p>`,
+      autoplay: true,
+      controls: false,
+      response_allowed_while_playing: false,
+      trial_ends_after_video: true,
+      data: { ...base_data, trial_stage: 'video_autoprogress' }
+    },
+
+    // Stage 3: video with controls, subtitle always visible as the prompt,
+    // and five pictures in a fixed order in a single row. Each button's HTML
+    // is an <img>; clicking one ends the trial (built-in video-button-response).
+    {
+      type: jsPsychVideoButtonResponse,
+      stimulus: [s.video],
+      width: 640,
+      //height: 400, // 360 (true 16:9 height at 640 wide) + ~40px buffer for controls
+      choices: s.picture_choices.map(img => `<img src="${img}" style="width:180px; padding:4px;"/>`),
+      button_layout: 'grid',
+      grid_rows: 1,
+      grid_columns: 5,
+      prompt: `<p style="font-size:18px;">She said: \"${s.subtitle}\" <br><br> Which object do you think she\'s talking about?</p>`,
+      autoplay: false,
+      controls: true,
+      response_allowed_while_playing: true,
+      trial_ends_after_video: false,          // trial waits for a button click, not just video end
+      data: {
+        ...base_data,
+        trial_stage: 'video_picture',
+        picture_order: s.picture_choices,   // files, in the order shown (left to right)
+        picture_numbers: s.picture_numbers  // e.g. [5,4,3,2,1]
+      },
+      on_finish: function (data) {
+        // convenience fields: which picture was clicked (file + 1-based position)
+        data.selected_picture = data.picture_order[data.response];
+        data.selected_picture_position = data.response + 1;            // screen position (1 = leftmost)
+        data.selected_picture_number = data.picture_numbers[data.response]; // which picture (choiceN)
+      },
+      // The plugin always renders: video -> buttons -> prompt (in that DOM order).
+      // This moves the prompt element to appear right before the button group instead,
+      // so the subtitle shows above the picture buttons rather than below them.
+      on_load: function () {
+        const displayElement = jsPsych.getDisplayElement();
+        const btnGroup = displayElement.querySelector('[id$="btngroup"]');
+        const promptEl = displayElement.lastElementChild;
+        if (btnGroup && promptEl && promptEl !== btnGroup) {
+          displayElement.insertBefore(promptEl, btnGroup);
+        }
+      }
+    },
+
+    // Stage 4: sentence-selection question (built-in html-button-response,
+    // with each button's text being the subtitle or one of five other sentences, in random order).
+    {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `<p style="font-size:20px;">${s.sentence_prompt}</p>`,
+      choices: shuffled_sentences,
+      button_layout: 'grid',
+      grid_rows: 6,
+      grid_columns: 1,
+      data: {
+        ...base_data,
+        trial_stage: 'sentence_choice',
+        sentence_order: shuffled_sentences, // order the sentences were actually shown in for this trial
+        correct_sentence: s.subtitle
+      },
+      on_finish: function (data) {
+        // convenience field: which sentence was actually clicked
+        data.selected_sentence = data.sentence_order[data.response];
+        data.selected_subtitle = (data.selected_sentence === data.correct_sentence); // true if they picked the subtitle
+      }
+    },
+
+    // Stage 5: Continue button to next trial
+    {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `<p>When you're ready, click on this button to continue. <br></p>`,
+      choices: ['Continue']
+    }
+  ];
+}
+
+// =========================================================
+// BUILD AND RUN THE EXPERIMENT
+// Wrapped in an async function because getCondition() returns a Promise --
+// everything below it (stimuli, preload, timeline) depends on knowing which
+// list this participant got, so it all has to wait for it.
+// =========================================================
+async function runExperiment() {
+
+  // ---- Ask DataPipe which list (0-7) this participant is assigned to ----
+  // Replaces the old `Math.floor(Math.random() * lists.length)` -- DataPipe
+  // handles balanced assignment across participants for you. Make sure your
+  // DataPipe experiment (DATAPIPE_EXPERIMENT_ID above) is configured with
+  // exactly 8 conditions (0-7) to match your 8 lists.
+  let list_number;
+  try {
+    list_number = await jsPsychExtensionPipe.getCondition(DATAPIPE_EXPERIMENT_ID);
+  } catch (error) {
+    document.body.innerHTML = "<p>The experiment could not be started.</p>";
+    throw error;
+  }
+ 
+  // ---- Build the actual stimulus objects for the chosen list ----
+  const stimuli = lists[list_number].map(entry => build_trial(entry[0], entry[1], entry[2], entry[3]));
+  
+  // ---- Record list assignment in the data for later analysis ----
+  jsPsych.data.addProperties({
+    list_number: list_number,
+    picture_order_condition: lists[list_number][0][3].join('') // "12345" or "54321"
+  });
+
+  // ---- Build the practice stimulus objects ----
+  // Practice trials use the same picture order as this participant's main trials.
+  const practice_stimuli = practice_list.map(entry => build_trial(entry[0], entry[1], entry[2], lists[list_number][0][3]));
+
+  // ---- Preload all media files (practice + real) ----
+  const all_images = [];
+  const all_videos = [];
+  [...practice_stimuli, ...stimuli].forEach(s => {
+    all_images.push(s.fixation_image, ...s.picture_choices);
+    all_videos.push(s.video);
+  });
+
+  const preload = {
+    type: jsPsychPreload,
+    images: all_images,
+    video: all_videos
+  };
+
+  // ---- Build the timeline ----
+  const timeline = [
+    preload,
+    consent_trial,
+    instructions_loop,
+    audio_check_trial,
+    ...practice_stimuli.flatMap(s => make_trial_sequence(s, true)),
+    // ready_trial,
+    ...stimuli.flatMap(s => make_trial_sequence(s, false))
+  ];
+
+  const demographic_survey = {
+    type: jsPsychSurveyHtmlForm,
+    preamble: '<p>Before we finish: <br><br></p>',
+    html: `
+      <p style="text-align:left; max-width:400px; margin:0 auto;">
+        Are you at least 18 years old?<br>
+        <label><input type="radio" name="age_18_or_older" value="yes" required> Yes</label>
+        <label style="margin-left:15px;"><input type="radio" name="age_18_or_older" value="no"> No</label>
+      </p>
+      <br><br>
+      <p style="text-align:left; max-width:400px; margin:0 auto;">
+        <label for="native_language">What language(s) did you speak before the age of five?</label><br>
+        <input type="text" id="native_language" name="native_language" required style="width:100%; margin-top:5px;">
+      </p>
+    `,
+    data: { trial_stage: 'demographics' }
+  };
+  timeline.push(demographic_survey);
+
+  jsPsych.run(timeline);
+}
+
+runExperiment();
+
+</script>
+</html>
